@@ -737,7 +737,7 @@ void Map::publishMarker(Fiducial &fid) {
     links.color.a = 1.0f;
     links.id = fid.id + 40000;
     links.ns = "links";
-    links.scale.x = links.scale.y = links.scale.z = 0.1 * fiducialLen;
+    links.scale.x = links.scale.y = links.scale.z = 0.01 * fiducialLen;
     links.pose.position.x = 0;
     links.pose.position.y = 0;
     links.pose.position.z = 0;
