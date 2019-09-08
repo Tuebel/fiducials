@@ -15,8 +15,10 @@
   <arg name="do_pose_estimation" default="false"/>
   <arg name="covariance_diagonal" default="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]"/>
 
-  <node pkg="tf2_ros" type="static_transform_publisher" name="static_base_cam" args="0 0 0 0 0 0 1 map base_link" />
-  <node pkg="tf2_ros" type="static_transform_publisher" name="static_world_base" args="0 0 0 0 0 0 1 base_link camera" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="world_base_tf" args="0 0 0 0 0 0 1 world base_link" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="base_cam_tf" args="0 0 0 0 0 0 1 base_link camera" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="world_map_tf" args="0 0 0 0 0 0 1 fid0 map" />
+
 
   <node type="fiducial_slam" pkg="fiducial_slam" output="screen" 
     name="fiducial_slam">

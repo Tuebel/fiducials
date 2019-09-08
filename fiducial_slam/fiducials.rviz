@@ -8,9 +8,11 @@ Panels:
         - /Status1
         - /Fiducials1
         - /TF1
+        - /TF1/Status1
         - /TF1/Frames1
         - /Obstacle1
         - /Camera1
+        - /Camera1/Visibility1
       Splitter Ratio: 0.5091384053230286
     Tree Height: 243
   - Class: rviz/Selection
@@ -93,13 +95,15 @@ Visualization Manager:
           Value: true
         odom:
           Value: true
+        world:
+          Value: true
       Marker Scale: 0.10000000149011612
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        map:
+        world:
           base_link:
             camera:
               fid0:
@@ -132,8 +136,9 @@ Visualization Manager:
                 {}
               fid9:
                 {}
-          odom:
-            {}
+          map:
+            odom:
+              {}
       Update Interval: 0
       Value: true
     - Alpha: 0.5
@@ -226,7 +231,7 @@ Visualization Manager:
       Unreliable: false
       Value: true
       Visibility:
-        Fiducials: false
+        Fiducials: true
         Grid: false
         LaserScan: false
         Obstacle: false
@@ -238,7 +243,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: base_link
+    Fixed Frame: world
     Frame Rate: 30
   Name: root
   Tools:
