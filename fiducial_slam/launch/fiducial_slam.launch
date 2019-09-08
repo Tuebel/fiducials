@@ -9,11 +9,14 @@
   <arg name="publish_tf" default="true"/>
   <arg name="tf_publish_interval" default="0.2"/>
   <arg name="future_date_transforms" default="0.0"/>
-  <arg name="publish_6dof_pose" default="false"/>
+  <arg name="publish_6dof_pose" default="true"/>
   <arg name="fiducial_len" default="0.14"/>
   <arg name="systematic_error" default="0.01"/>
   <arg name="do_pose_estimation" default="false"/>
   <arg name="covariance_diagonal" default="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]"/>
+
+  <node pkg="tf2_ros" type="static_transform_publisher" name="static_base_cam" args="0 0 0 0 0 0 1 map base_link" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="static_world_base" args="0 0 0 0 0 0 1 base_link camera" />
 
   <node type="fiducial_slam" pkg="fiducial_slam" output="screen" 
     name="fiducial_slam">

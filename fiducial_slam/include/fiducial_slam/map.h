@@ -111,6 +111,7 @@ public:
     std::string odomFrame;
     std::string cameraFrame;
     std::string baseFrame;
+    int masterFid;
     double future_date_transforms;
     bool publish_6dof_pose;
     double multiErrorThreshold;
@@ -136,7 +137,7 @@ public:
     Map(ros::NodeHandle &nh);
     void update();
     void update(std::vector<Observation> &obs, const ros::Time &time);
-    void autoInit(const std::vector<Observation> &obs, const ros::Time &time);
+    void init(const std::vector<Observation> &obs, const ros::Time &time);
     int updatePose(std::vector<Observation> &obs, const ros::Time &time,
                    tf2::Stamped<TransformWithVariance> &cameraPose);
     void updateMap(const std::vector<Observation> &obs, const ros::Time &time,
