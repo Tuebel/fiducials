@@ -82,7 +82,6 @@ Fiducial::Fiducial(int id, const tf2::Stamped<TransformWithVariance> &pose) {
 Map::Map(ros::NodeHandle &nh) : tfBuffer(ros::Duration(30.0)) {
     frameNum = 0;
     initialFrameNum = 0;
-    originFid = -1;
     isInitializingMap = false;
     havePose = false;
     fiducialToAdd = -1;
@@ -105,6 +104,7 @@ Map::Map(ros::NodeHandle &nh) : tfBuffer(ros::Duration(30.0)) {
     nh.param<std::string>("base_frame", baseFrame, "base_footprint");
 
     nh.param<int>("master_fid", masterFid, 0);
+    nh.param<double>("fiducial_len", fiducialLen, 0.14);
 
     nh.param<float>("tf_publish_interval", tfPublishInterval, 1.0);
     nh.param<bool>("publish_tf", publishPoseTf, true);
@@ -438,14 +438,26 @@ void Map::init(const std::vector<Observation> &obs, const ros::Time &time) {
     tf2::Transform T_baseCam;
 
     if (fiducials.size() == 0) {
-        ROS_INFO("Initializing map from master fiducial %d", masterFid);
+        // find observation of master for correct variance
+        size_t mo_index = -1;
+        for (size_t i = 0; i < obs.size(); i++) {
+            if (obs[i].fid == masterFid) {
+                mo_index = i;
+                break;
+            }
+        }
+        if (mo_index < 0) {
+            ROS_WARN("Could not find the master marker to initialize the map");
+            return;
+        }
         // init at origin
-        tf2::Stamped<TransformWithVariance> T;
-        T.transform.setIdentity();
-        fiducials[masterFid] = Fiducial(masterFid, T);
+        ROS_INFO("Initializing map from master fiducial %d", masterFid);
+        tf2::Stamped<TransformWithVariance> master_tf = obs[mo_index].T_camFid;
+        master_tf.transform.setIdentity();
+        fiducials[masterFid] = Fiducial(masterFid, master_tf);
     } else {
         for (const Observation &o : obs) {
-            if (o.fid == originFid) {
+            if (o.fid == masterFid) {
                 tf2::Stamped<TransformWithVariance> T = o.T_camFid;
 
                 tf2::Vector3 trans = T.transform.getOrigin();
@@ -456,17 +468,16 @@ void Map::init(const std::vector<Observation> &obs, const ros::Time &time) {
                                     T_baseCam)) {
                     T.setData(T_baseCam * T);
                 }
-
-                fiducials[originFid].update(T);
+                fiducials[masterFid].update(T);
                 break;
             }
         }
     }
 
-    if (frameNum - initialFrameNum > 10 && originFid != -1) {
+    if (frameNum - initialFrameNum > 10 && masterFid != -1) {
         isInitializingMap = false;
 
-        fiducials[originFid].pose.variance = 0.0;
+        fiducials[masterFid].pose.variance = 0.0;
     }
 }
 
@@ -504,7 +515,7 @@ void Map::handleAddFiducial(const std::vector<Observation> &obs) {
             }
 
             fiducials[o.fid] = Fiducial(o.fid, T);
-            fiducials[originFid].pose.variance = 0.0;
+            fiducials[masterFid].pose.variance = 0.0;
             isInitializingMap = false;
 
             fiducialToAdd = -1;
@@ -660,9 +671,9 @@ void Map::publishMarker(Fiducial &fid) {
     marker.action = visualization_msgs::Marker::ADD;
     toMsg(fid.pose.transform, marker.pose);
 
-    marker.scale.x = 0.15;
-    marker.scale.y = 0.15;
-    marker.scale.z = 0.01;
+    marker.scale.x = fiducialLen;
+    marker.scale.y = fiducialLen;
+    marker.scale.z = 0.1 * fiducialLen;
     if (fid.visible) {
         marker.color.r = 1.0f;
         marker.color.g = 0.0f;
@@ -690,8 +701,8 @@ void Map::publishMarker(Fiducial &fid) {
     cylinder.color.a = 0.5f;
     cylinder.id = fid.id + 10000;
     cylinder.ns = "sigma";
-    cylinder.scale.x = cylinder.scale.y = std::max(std::sqrt(fid.pose.variance), 0.1);
-    cylinder.scale.z = 0.01;
+    cylinder.scale.x = cylinder.scale.y = 10 * fiducialLen * std::max(std::sqrt(fid.pose.variance), 0.1);
+    cylinder.scale.z = 0.1 * fiducialLen;
     cylinder.pose.position.x = marker.pose.position.x;
     cylinder.pose.position.y = marker.pose.position.y;
     cylinder.pose.position.z = marker.pose.position.z;
@@ -705,11 +716,11 @@ void Map::publishMarker(Fiducial &fid) {
     text.header.frame_id = mapFrame;
     text.color.r = text.color.g = text.color.b = text.color.a = 1.0f;
     text.id = fid.id;
-    text.scale.x = text.scale.y = text.scale.z = 0.1;
+    text.scale.x = text.scale.y = text.scale.z = fiducialLen;
     text.pose.position.x = marker.pose.position.x;
     text.pose.position.y = marker.pose.position.y;
     text.pose.position.z = marker.pose.position.z;
-    text.pose.position.z += (marker.scale.z / 2.0) + 0.1;
+    text.pose.position.z += (marker.scale.z / 2.0) + fiducialLen;
     text.id = fid.id + 30000;
     text.ns = "text";
     text.text = std::to_string(fid.id);
@@ -726,7 +737,7 @@ void Map::publishMarker(Fiducial &fid) {
     links.color.a = 1.0f;
     links.id = fid.id + 40000;
     links.ns = "links";
-    links.scale.x = links.scale.y = links.scale.z = 0.02;
+    links.scale.x = links.scale.y = links.scale.z = 0.1 * fiducialLen;
     links.pose.position.x = 0;
     links.pose.position.y = 0;
     links.pose.position.z = 0;
@@ -792,7 +803,6 @@ bool Map::clearCallback(std_srvs::Empty::Request &req, std_srvs::Empty::Response
 
     fiducials.clear();
     initialFrameNum = frameNum;
-    originFid = -1;
 
     return true;
 }

@@ -10,7 +10,7 @@
   <arg name="tf_publish_interval" default="0.2"/>
   <arg name="future_date_transforms" default="0.0"/>
   <arg name="publish_6dof_pose" default="true"/>
-  <arg name="fiducial_len" default="0.14"/>
+  <arg name="fiducial_len" default="0.026"/>
   <arg name="systematic_error" default="0.01"/>
   <arg name="do_pose_estimation" default="false"/>
   <arg name="covariance_diagonal" default="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]"/>
@@ -33,6 +33,5 @@
     <param name="fiducial_len" value="$(arg fiducial_len)"/>
     <param name="covariance_diagonal" value="$(arg covariance_diagonal)"/>
     <remap from="/camera_info" to="$(arg camera)/camera_info"/>
-
   </node>
 </launch>

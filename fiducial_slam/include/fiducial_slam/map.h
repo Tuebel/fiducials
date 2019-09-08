@@ -112,6 +112,7 @@ public:
     std::string cameraFrame;
     std::string baseFrame;
     int masterFid;
+    double fiducialLen;
     double future_date_transforms;
     bool publish_6dof_pose;
     double multiErrorThreshold;
@@ -120,7 +121,6 @@ public:
     bool readOnly;
     int frameNum;
     int initialFrameNum;
-    int originFid;
 
     bool overridePublishedCovariance;
     std::vector<double> covarianceDiagonal;
