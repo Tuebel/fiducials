@@ -50,7 +50,6 @@ static double systematic_error = 0.01;
 
 // Constructor for observation
 Observation::Observation(int fid, const tf2::Stamped<TransformWithVariance> &camFid) {
-    ROS_INFO("observation id %d var %f", fid, camFid.variance);
     this->fid = fid;
 
     tf2_ros::TransformBroadcaster broadcaster;
@@ -242,7 +241,7 @@ bool Map::lookupTransform(const std::string &from, const std::string &to, const 
     }
 }
 
-// update pose estimate of robot.  We combine the camera->base_link
+// update pose estimate of robot.  We combine the 
 // tf to each estimate so we can evaluate how good they are.  A good
 // estimate would have z == roll == pitch == 0.
 int Map::updatePose(std::vector<Observation> &obs, const ros::Time &time,
@@ -268,7 +267,6 @@ int Map::updatePose(std::vector<Observation> &obs, const ros::Time &time,
             tf_obs.transform.getBasis().getRPY(roll, pitch, yaw);
             // Create variance according to how well the robot is upright on the ground
             // TODO: Create variance for each DOF
-            // TODO: Take into account position according to odom
             auto cam_f = o.T_camFid.transform.getOrigin();
             double s1 = std::pow(position.z() / cam_f.z(), 2) *
                         (std::pow(cam_f.x(), 2) + std::pow(cam_f.y(), 2));
@@ -328,7 +326,7 @@ int Map::updatePose(std::vector<Observation> &obs, const ros::Time &time,
     return n_estimates;
 }
 
-// Publish map -> odom tf
+// Publish camera -> master
 
 void Map::publishTf() {
     tfPublishTime = ros::Time::now();
@@ -368,14 +366,11 @@ static int findClosestObs(const std::vector<Observation> &obs) {
 
 // Initialize a map from the closest observed fiducial
 // Figure out the closest marker, and then figure out the
-// pose of that marker such that base_link is at the origin of the
+// pose of that marker such that master is at the origin of the
 // map frame
 
 void Map::init(const std::vector<Observation> &obs, const ros::Time &time) {
     ROS_INFO("Init map %d", frameNum);
-
-    tf2::Transform T_baseCam;
-
     if (fiducials.size() == 0) {
         // master
         ROS_INFO("Initializing map from master fiducial %d", masterFid);

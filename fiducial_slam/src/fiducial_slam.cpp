@@ -101,7 +101,6 @@ void FiducialSlam::transformCallback(const fiducial_msgs::FiducialTransformArray
         Observation obs(ft.fiducial_id, tf2::Stamped<TransformWithVariance>(
                                             TransformWithVariance(ft.transform, variance),
                                             msg->header.stamp, msg->header.frame_id));
-        ROS_INFO("observation id %d var %f obj_error %f", ft.fiducial_id, variance, ft.object_error);
         observations.push_back(obs);
     }
 
