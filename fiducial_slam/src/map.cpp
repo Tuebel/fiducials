@@ -101,7 +101,6 @@ Map::Map(ros::NodeHandle &nh) : tfBuffer(ros::Duration(30.0)) {
 
     nh.param<std::string>("map_frame", mapFrame, "map");
     nh.param<std::string>("master_frame", masterFrame, "master");
-    nh.param<std::string>("base_frame", baseFrame, "base_footprint");
 
     nh.param<int>("master_fid", masterFid, 0);
     nh.param<double>("fiducial_len", fiducialLen, 0.14);
@@ -297,9 +296,10 @@ int Map::updatePose(std::vector<Observation> &obs, const ros::Time &time,
         ROS_INFO("Pose ALL %lf %lf %lf %lf %lf %lf %f", trans.x(), trans.y(), trans.z(), r, p, y,
                  tf_cam_map.variance);
     }
-    // Update and publish
+    // Update camera pose
     T_mapCam = tf_cam_map;
     T_mapCam.transform = T_mapCam.transform.inverse();
+    // Update and publish
     auto map_pose = toPose(tf_cam_map);
     if (overridePublishedCovariance) {
         for (int i = 0; i <= 5; i++) {
@@ -367,47 +367,16 @@ void Map::init(const std::vector<Observation> &obs, const ros::Time &time) {
     tf2::Transform T_baseCam;
 
     if (fiducials.size() == 0) {
-        // find observation of master for correct variance
-        size_t mo_index = -1;
-        for (size_t i = 0; i < obs.size(); i++) {
-            if (obs[i].fid == masterFid) {
-                mo_index = i;
-                break;
-            }
-        }
-        if (mo_index == -1) {
-            ROS_WARN("Could not find the master marker to initialize the map");
-            return;
-        }
-        // init at origin
+        // master
         ROS_INFO("Initializing map from master fiducial %d", masterFid);
-        ROS_INFO("Index %d obs size %d", mo_index, obs.size());
-        tf2::Stamped<TransformWithVariance> master_tf = obs[mo_index].T_camFid;
+        tf2::Stamped<TransformWithVariance> master_tf;
         master_tf.transform.setIdentity();
+        master_tf.variance = 1.0;
         fiducials[masterFid] = Fiducial(masterFid, master_tf);
         ROS_INFO("Initializing set master to origin");
-    } else {
-        for (const Observation &o : obs) {
-            if (o.fid == masterFid) {
-                tf2::Stamped<TransformWithVariance> T = o.T_camFid;
-
-                tf2::Vector3 trans = T.transform.getOrigin();
-                ROS_INFO("Estimate of %d from base %lf %lf %lf err %lf", o.fid, trans.x(),
-                         trans.y(), trans.z(), o.T_camFid.variance);
-
-                if (lookupTransform(baseFrame, o.T_camFid.frame_id_, o.T_camFid.stamp_,
-                                    T_baseCam)) {
-                    T.setData(T_baseCam * T);
-                }
-                fiducials[masterFid].update(T);
-                break;
-            }
-        }
     }
-
     if (frameNum - initialFrameNum > 10 && masterFid != -1) {
         isInitializingMap = false;
-
         fiducials[masterFid].pose.variance = 0.0;
     }
 }
@@ -430,20 +399,6 @@ void Map::handleAddFiducial(const std::vector<Observation> &obs) {
             ROS_INFO("Adding fiducial_id %d to map", fiducialToAdd);
 
             tf2::Stamped<TransformWithVariance> T = o.T_camFid;
-
-            // Take into account position of camera on base
-            tf2::Transform T_baseCam;
-            if (lookupTransform(baseFrame, o.T_camFid.frame_id_, o.T_camFid.stamp_, T_baseCam)) {
-                T.setData(T_baseCam * T);
-            }
-
-            // Take into account position of robot in the world if known
-            tf2::Transform T_mapBase;
-            if (lookupTransform(mapFrame, baseFrame, ros::Time(0), T_mapBase)) {
-                T.setData(T_mapBase * T);
-            } else {
-                ROS_INFO("Placing robot at the origin");
-            }
 
             fiducials[o.fid] = Fiducial(o.fid, T);
             fiducials[masterFid].pose.variance = 0.0;

@@ -2,7 +2,6 @@
    Run the fiducial_slam node
 -->
 <launch>
-  <arg name="camera" default="/camera/color"/>
   <arg name="dictionary" default="8"/>
   <arg name="map_frame" default="map"/>
   <arg name="odom_frame" default="odom"/>
@@ -12,12 +11,11 @@
   <arg name="future_date_transforms" default="0.0"/>
   <arg name="publish_6dof_pose" default="true"/>
   <arg name="fiducial_len" default="0.024"/>
-  <arg name="systematic_error" default="0.01"/>
+  <arg name="systematic_error" default="0.001"/>
   <arg name="do_pose_estimation" default="false"/>
   <arg name="covariance_diagonal" default="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]"/>
 
-  <node pkg="tf2_ros" type="static_transform_publisher" name="world_base_tf" args="0 0 0 0 0 0 1 world base_link" />
-  <node pkg="tf2_ros" type="static_transform_publisher" name="base_cam_tf" args="0 0 0 0 0 0 1 base_link camera_link" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="wolrd_cam" args="0 0 0 0 0 0 1 world camera_link" />
   <node pkg="tf2_ros" type="static_transform_publisher" name="world_map_tf" args="0 0 0 0 0 0 1 world map" />
 
   <include file="$(find realsense2_camera)/launch/rs_camera.launch">
@@ -27,8 +25,11 @@
     <arg name="enable_infra1" value="false"/>
     <arg name="enable_infra2" value="false"/>
     <arg name="enable_sync" value="true"/>
+  </include> 
+  <arg name="camera" default="/camera/color"/>
+  <!-- <node pkg="cv_camera" type="cv_camera_node" name="cv_camera"/>
+  <arg name="camera" default="/cv_camera"/> -->
 
-  </include>
 
   <include file="$(find aruco_detect)/launch/aruco_detect.launch">
     <arg name="camera" value="$(arg camera)"/>

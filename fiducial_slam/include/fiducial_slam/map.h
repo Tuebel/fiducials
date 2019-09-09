@@ -109,7 +109,6 @@ public:
     std::string mapFilename;
     std::string mapFrame;
     std::string masterFrame;
-    std::string baseFrame;
     int masterFid;
     double fiducialLen;
     double future_date_transforms;
