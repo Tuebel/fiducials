@@ -1,6 +1,7 @@
 <!-- Run the aruco_detect node -->
 <launch>
   <!-- namespace for camera input -->
+  <arg name="camera" default="/camera"/>
   <arg name="publish_images" default="true" />
   <arg name="fiducial_len" default="0.026"/>
   <arg name="dictionary" default="0"/>
@@ -15,7 +16,7 @@
     <param name="do_pose_estimation" value="$(arg do_pose_estimation)"/>
     <param name="ignore_fiducials" value="$(arg ignore_fiducials)"/>
     <param name="fiducial_len_override" value="$(arg fiducial_len_override)"/>
-    <remap from="/camera" to="/cv_camera/image_raw"/>
-    <remap from="/camera_info" to="/cv_camera/camera_info"/>
+    <remap from="/camera" to="$(arg camera)/image_raw"/>
+    <remap from="/camera_info" to="$(arg camera)/camera_info"/>
   </node>
 </launch>

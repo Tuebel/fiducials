@@ -100,7 +100,7 @@ Map::Map(ros::NodeHandle &nh) : tfBuffer(ros::Duration(30.0)) {
     addSrv = nh.advertiseService("add_fiducial", &Map::addFiducialCallback, this);
 
     nh.param<std::string>("map_frame", mapFrame, "map");
-    nh.param<std::string>("odom_frame", odomFrame, "odom");
+    nh.param<std::string>("master_frame", masterFrame, "master");
     nh.param<std::string>("base_frame", baseFrame, "base_footprint");
 
     nh.param<int>("master_fid", masterFid, 0);
@@ -110,7 +110,6 @@ Map::Map(ros::NodeHandle &nh) : tfBuffer(ros::Duration(30.0)) {
     nh.param<bool>("publish_tf", publishPoseTf, true);
     nh.param<double>("systematic_error", systematic_error, 0.01);
     nh.param<double>("future_date_transforms", future_date_transforms, 0.1);
-    nh.param<bool>("publish_6dof_pose", publish_6dof_pose, false);
     nh.param<bool>("read_only_map", readOnly, false);
 
     std::fill(covarianceDiagonal.begin(), covarianceDiagonal.end(), 0);
@@ -248,145 +247,75 @@ bool Map::lookupTransform(const std::string &from, const std::string &to, const 
 // estimate would have z == roll == pitch == 0.
 int Map::updatePose(std::vector<Observation> &obs, const ros::Time &time,
                     tf2::Stamped<TransformWithVariance> &T_mapCam) {
-    int numEsts = 0;
-    tf2::Stamped<TransformWithVariance> T_camBase;
-    tf2::Stamped<TransformWithVariance> T_baseCam;
-    tf2::Stamped<TransformWithVariance> T_mapBase;
-
     if (obs.size() == 0) {
         return 0;
     }
-
-    if (lookupTransform(obs[0].T_camFid.frame_id_, baseFrame, time, T_camBase.transform)) {
-        tf2::Vector3 c = T_camBase.transform.getOrigin();
-        ROS_INFO("camera->base   %lf %lf %lf", c.x(), c.y(), c.z());
-        T_camBase.variance = 1.0;
-    } else {
-        ROS_ERROR("Cannot determine tf from camera to robot\n");
-    }
-
-    if (lookupTransform(baseFrame, obs[0].T_camFid.frame_id_, time, T_baseCam.transform)) {
-        tf2::Vector3 c = T_baseCam.transform.getOrigin();
-        ROS_INFO("base->camera   %lf %lf %lf", c.x(), c.y(), c.z());
-        T_baseCam.variance = 1.0;
-    } else {
-        ROS_ERROR("Cannot determine tf from robot to camera\n");
-        return numEsts;
-    }
-
+    // master marker is in origin of map
+    tf2::Stamped<TransformWithVariance> tf_cam_map;
+    int n_estimates = 0;
     for (Observation &o : obs) {
         if (fiducials.find(o.fid) != fiducials.end()) {
+            // estimate map pose in camera frame from the observation
             const Fiducial &fid = fiducials[o.fid];
+            tf2::Stamped<TransformWithVariance> tf_fid_map = fiducials[o.fid].pose;
+            tf_fid_map.transform = tf_fid_map.transform.inverse();
+            tf2::Stamped<TransformWithVariance> tf_obs = o.T_camFid * tf_fid_map;
+            tf_obs.frame_id_ = o.T_camFid.frame_id_;
+            tf_obs.stamp_ = o.T_camFid.stamp_;
 
-            tf2::Stamped<TransformWithVariance> p = fid.pose * o.T_fidCam;
-
-            p.frame_id_ = mapFrame;
-            p.stamp_ = o.T_fidCam.stamp_;
-
-            p.setData(p * T_camBase);
-            auto position = p.transform.getOrigin();
+            auto position = tf_obs.transform.getOrigin();
             double roll, pitch, yaw;
-            p.transform.getBasis().getRPY(roll, pitch, yaw);
-
-            // Create variance according to how well the robot is upright on the ground
-            // TODO: Create variance for each DOF
-            // TODO: Take into account position according to odom
-            auto cam_f = o.T_camFid.transform.getOrigin();
-            double s1 = std::pow(position.z() / cam_f.z(), 2) *
-                        (std::pow(cam_f.x(), 2) + std::pow(cam_f.y(), 2));
-            double s2 = position.length2() * std::pow(std::sin(roll), 2);
-            double s3 = position.length2() * std::pow(std::sin(pitch), 2);
-            p.variance = s1 + s2 + s3 + systematic_error;
-            o.T_camFid.variance = p.variance;
+            tf_obs.transform.getBasis().getRPY(roll, pitch, yaw);
 
             ROS_INFO("Pose %d %lf %lf %lf %lf %lf %lf %lf", o.fid, position.x(), position.y(),
-                     position.z(), roll, pitch, yaw, p.variance);
-
-            // drawLine(fid.pose.getOrigin(), o.position);
+                     position.z(), roll, pitch, yaw, tf_obs.variance);
 
             if (std::isnan(position.x()) || std::isnan(position.y()) || std::isnan(position.z())) {
                 ROS_WARN("Skipping NAN estimate\n");
                 continue;
             };
-
-            // compute base_link pose based on this estimate
-
-            if (numEsts == 0) {
-                T_mapBase = p;
+            // update the estimate
+            if (n_estimates == 0) {
+                tf_cam_map = tf_obs;
             } else {
-                T_mapBase.setData(averageTransforms(T_mapBase, p));
-                T_mapBase.stamp_ = p.stamp_;
+                tf_cam_map.setData(averageTransforms(tf_cam_map, tf_obs));
+                tf_cam_map.stamp_ = tf_obs.stamp_;
             }
-            numEsts++;
+            n_estimates++;
         }
     }
-
-    if (numEsts == 0) {
+    if (n_estimates == 0) {
         ROS_INFO("Finished frame - no estimates\n");
-        return numEsts;
+        return n_estimates;
     }
-
     // New scope for logging vars
     {
-        tf2::Vector3 trans = T_mapBase.transform.getOrigin();
+        tf2::Vector3 trans = tf_cam_map.transform.getOrigin();
         double r, p, y;
-        T_mapBase.transform.getBasis().getRPY(r, p, y);
+        tf_cam_map.transform.getBasis().getRPY(r, p, y);
 
         ROS_INFO("Pose ALL %lf %lf %lf %lf %lf %lf %f", trans.x(), trans.y(), trans.z(), r, p, y,
-                 T_mapBase.variance);
+                 tf_cam_map.variance);
     }
-
-    tf2::Stamped<TransformWithVariance> basePose = T_mapBase;
-    basePose.frame_id_ = mapFrame;
-    auto robotPose = toPose(basePose);
-
+    // Update and publish
+    T_mapCam = tf_cam_map;
+    T_mapCam.transform = T_mapCam.transform.inverse();
+    auto map_pose = toPose(tf_cam_map);
     if (overridePublishedCovariance) {
         for (int i = 0; i <= 5; i++) {
-            robotPose.pose.covariance[i * 6 + i] = covarianceDiagonal[i];  // Fill the diagonal
+            map_pose.pose.covariance[i * 6 + i] = covarianceDiagonal[i];  // Fill the diagonal
         }
     }
-
-    T_mapCam = T_mapBase * T_baseCam;
-
-    robotPosePub.publish(robotPose);
-
-    tf2::Stamped<TransformWithVariance> outPose = basePose;
-    outPose.frame_id_ = mapFrame;
-    std::string outFrame = baseFrame;
-
-    if (!odomFrame.empty()) {
-        outFrame = odomFrame;
-        tf2::Transform odomTransform;
-        if (lookupTransform(odomFrame, baseFrame, outPose.stamp_, odomTransform)) {
-            outPose.setData(basePose * odomTransform.inverse());
-            outFrame = odomFrame;
-
-            tf2::Vector3 c = odomTransform.getOrigin();
-            ROS_INFO("odom   %lf %lf %lf", c.x(), c.y(), c.z());
-        }
-    }
-
-    // Make outgoing transform make sense - ie only consist of x, y, yaw
-    // This can be disabled via the publish_6dof_pose param, mainly for debugging
-    if (!publish_6dof_pose) {
-        tf2::Vector3 translation = outPose.transform.getOrigin();
-        translation.setZ(0);
-        outPose.transform.setOrigin(translation);
-        double roll, pitch, yaw;
-        outPose.transform.getBasis().getRPY(roll, pitch, yaw);
-        outPose.transform.getBasis().setRPY(0, 0, yaw);
-    }
-
-    poseTf = toMsg(outPose);
-    poseTf.child_frame_id = outFrame;
+    robotPosePub.publish(map_pose);
+    poseTf = toMsg(tf_cam_map);
+    poseTf.child_frame_id = masterFrame;
     havePose = true;
-
     if (publishPoseTf) {
         publishTf();
     }
 
-    ROS_INFO("Finished frame. Estimates %d\n", numEsts);
-    return numEsts;
+    ROS_INFO("Finished frame. Estimates %d\n", n_estimates);
+    return n_estimates;
 }
 
 // Publish map -> odom tf
@@ -446,15 +375,17 @@ void Map::init(const std::vector<Observation> &obs, const ros::Time &time) {
                 break;
             }
         }
-        if (mo_index < 0) {
+        if (mo_index == -1) {
             ROS_WARN("Could not find the master marker to initialize the map");
             return;
         }
         // init at origin
         ROS_INFO("Initializing map from master fiducial %d", masterFid);
+        ROS_INFO("Index %d obs size %d", mo_index, obs.size());
         tf2::Stamped<TransformWithVariance> master_tf = obs[mo_index].T_camFid;
         master_tf.transform.setIdentity();
         fiducials[masterFid] = Fiducial(masterFid, master_tf);
+        ROS_INFO("Initializing set master to origin");
     } else {
         for (const Observation &o : obs) {
             if (o.fid == masterFid) {
@@ -701,7 +632,8 @@ void Map::publishMarker(Fiducial &fid) {
     cylinder.color.a = 0.5f;
     cylinder.id = fid.id + 10000;
     cylinder.ns = "sigma";
-    cylinder.scale.x = cylinder.scale.y = 10 * fiducialLen * std::max(std::sqrt(fid.pose.variance), 0.1);
+    cylinder.scale.x = cylinder.scale.y =
+        10 * fiducialLen * std::max(std::sqrt(fid.pose.variance), 0.1);
     cylinder.scale.z = 0.1 * fiducialLen;
     cylinder.pose.position.x = marker.pose.position.x;
     cylinder.pose.position.y = marker.pose.position.y;

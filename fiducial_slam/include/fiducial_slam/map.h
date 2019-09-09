@@ -108,13 +108,11 @@ public:
 
     std::string mapFilename;
     std::string mapFrame;
-    std::string odomFrame;
-    std::string cameraFrame;
+    std::string masterFrame;
     std::string baseFrame;
     int masterFid;
     double fiducialLen;
     double future_date_transforms;
-    bool publish_6dof_pose;
     double multiErrorThreshold;
 
     bool isInitializingMap;
