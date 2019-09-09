@@ -50,6 +50,7 @@ static double systematic_error = 0.01;
 
 // Constructor for observation
 Observation::Observation(int fid, const tf2::Stamped<TransformWithVariance> &camFid) {
+    ROS_INFO("observation id %d var %f", fid, camFid.variance);
     this->fid = fid;
 
     tf2_ros::TransformBroadcaster broadcaster;
@@ -194,8 +195,8 @@ void Map::updateMap(const std::vector<Observation> &obs, const ros::Time &time,
         {
             tf2::Vector3 trans = T_mapFid.transform.getOrigin();
 
-            ROS_INFO("Estimate of %d %lf %lf %lf var %lf %lf", o.fid, trans.x(), trans.y(),
-                     trans.z(), o.T_camFid.variance, T_mapFid.variance);
+            ROS_INFO("Estimate of %d %lf %lf %lf var %lf %lf %lf", o.fid, trans.x(), trans.y(),
+                     trans.z(), o.T_camFid.variance, T_mapFid.variance, T_mapCam.variance);
 
             if (std::isnan(trans.x()) || std::isnan(trans.y()) || std::isnan(trans.z())) {
                 ROS_WARN("Skipping NAN estimate\n");
@@ -265,7 +266,16 @@ int Map::updatePose(std::vector<Observation> &obs, const ros::Time &time,
             auto position = tf_obs.transform.getOrigin();
             double roll, pitch, yaw;
             tf_obs.transform.getBasis().getRPY(roll, pitch, yaw);
-
+            // Create variance according to how well the robot is upright on the ground
+            // TODO: Create variance for each DOF
+            // TODO: Take into account position according to odom
+            auto cam_f = o.T_camFid.transform.getOrigin();
+            double s1 = std::pow(position.z() / cam_f.z(), 2) *
+                        (std::pow(cam_f.x(), 2) + std::pow(cam_f.y(), 2));
+            double s2 = position.length2() * std::pow(std::sin(roll), 2);
+            double s3 = position.length2() * std::pow(std::sin(pitch), 2);
+            tf_obs.variance = s1 + s2 + s3 + systematic_error;
+            o.T_camFid.variance = tf_obs.variance;
             ROS_INFO("Pose %d %lf %lf %lf %lf %lf %lf %lf", o.fid, position.x(), position.y(),
                      position.z(), roll, pitch, yaw, tf_obs.variance);
 
