@@ -8,7 +8,7 @@
   <arg name="master_frame" default="master_marker"/>
   <arg name="master_fid" default="0"/>
   <arg name="publish_tf" default="true"/>
-  <arg name="tf_publish_interval" default="0.03"/>
+  <arg name="tf_publish_interval" default="0.05"/>
   <arg name="future_date_transforms" default="0.0"/>
   <arg name="publish_6dof_pose" default="true"/>
   <arg name="fiducial_len" default="0.03225"/>
@@ -19,8 +19,8 @@
   <node pkg="tf2_ros" type="static_transform_publisher" name="world_map_tf" args="0 0 0 0 0 0 1 $(arg master_frame) map" />
 
   <include file="$(find realsense2_camera)/launch/rs_camera.launch">
-    <arg name="color_width" value="1920"/>
-    <arg name="color_height" value="1080"/>
+    <arg name="color_width" value="1280"/>
+    <arg name="color_height" value="720"/>
     <arg name="enable_depth" value="true"/>
     <arg name="enable_infra1" value="false"/>
     <arg name="enable_infra2" value="false"/>
